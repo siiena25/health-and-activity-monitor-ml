@@ -1,10 +1,81 @@
 # Health and Activity Monitor ML
 
+A prototype child monitor. The child wears a wrist device on an Arduino Portenta H7, the parent watches heart rate,
+SpO2 and activity on an Android phone over Bluetooth Low Energy.
+
+| Part | Where |
+|---|---|
+| Parent's Android app | [`android/`](android/README.md) |
+| Activity model: data, training, export to C++ | `src/`, `data/`, `export/`, described below |
+| Arduino firmware | not in this repository |
+
+## Android app
+
+### Connecting to the wearable
+
+- Asks for the Bluetooth permission and offers to turn Bluetooth on.
+- Scans for a device named `ChildMonitor` or advertising its service, then connects and disconnects on tap.
+- After an unexpected disconnect it retries 3 times with a growing pause, then shows an error.
+
+### Monitor tab
+
+- Heart rate (BPM) and blood oxygen (SpO2) in large digits with a short trend chart for each.
+- Every value has a status: live, stale (older than 10 s), disconnected, no valid reading or waiting for data.
+- Implausible values (BPM outside 30–220, SpO2 outside 70–100, garbage text) are shown as `--`, never as a number.
+- Current activity and active heart rate warnings.
+
+### Activity tab
+
+- What the wearable recognised: sitting, standing, walking or running, or "Unknown" while it has no result.
+- The last 10 changes of activity with how long ago they happened.
+
+### Heart rate warnings (Alerts tab)
+
+| Warning | Default | How long it must last |
+|---|---|---|
+| Low heart rate | below 60 BPM | about 10 s |
+| High heart rate | above 130 at rest, above 180 with activity | about 10 s |
+| High for a long time | above 150 while walking or running | 5 min |
+
+- Shown as a red banner and as a phone notification with vibration.
+- Limits and duration are adjustable, warnings can be switched off, past warnings are listed.
+- Single spikes of the noisy sensor are ignored, and the activity limit stays for 3 minutes after a run.
+- No warnings on SpO2, because that reading is not validated.
+
+Full rules are in [`android/README.md`](android/README.md#heart-rate-warnings).
+
+### Diagnostics tab
+
+- Connection state, expected and discovered BLE characteristics.
+- Raw messages from the wearable (text, hex and whether they were accepted) and a log of connection events.
+
+### Demo mode
+
+A switch on the Device tab replaces the wearable with simulated values, so the app can be tried without hardware.
+The Monitor tab shows a red **DEMO MODE** banner while it is on.
+
+### Run it
+
+Android 8.0 or newer with Bluetooth LE. Open the `android/` folder in Android Studio, or from a terminal on macOS:
+
+```bash
+cd android
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+./gradlew installDebug
+```
+
+### Limitations
+
+- Not a medical device: readings and default limits are for a prototype only.
+- No background service, so monitoring works only while the app is running.
+- Works only within Bluetooth range, history is not saved after the app closes.
+
+## Activity model
+
 Trains a standing / sitting / walking / running classifier from the BMI160 (SEN0250) recordings made with `imu_logger.py`.
 
-The parent's Android app (heart rate, SpO2, activity and heart rate warnings over BLE) is in [`android/`](android/README.md).
-
-## Data
+### Data
 
 `data/raw/*.csv`, columns `t_ms, ax, ay, az (m/s²), gx, gy, gz (rad/s), label`, 20 Hz, accelerometer ±8 g, gyro ±2000 °/s.
 
@@ -14,11 +85,11 @@ Loading rules (`src/data.py`):
 - the first and last 5 s of each recording are trimmed;
 - windows are 3 s (60 samples), 50% overlap.
 
-## Features
+### Model features
 
 `src/features.py`: for each of ax, ay, az, gx, gy, gz, |acc|, |gyro|: mean, std, min, max, quartiles, RMS, mean absolute difference, zero-crossing rate, dominant frequency and amplitude, spectral entropy. 96 features. The orientation-free variant drops mean/min/max/quartiles/RMS of the raw accelerometer axes.
 
-## Run
+### Train
 
 ```bash
 python3 -m venv .venv
@@ -28,7 +99,7 @@ python3 -m venv .venv
 
 Output goes to `reports/results.txt` and `reports/*.png`.
 
-## Export to Portenta
+### Export to Portenta
 
 ```bash
 .venv/bin/python src/export.py
@@ -80,6 +151,6 @@ activityChar.writeValue(String(result.name) + "|" + String(result.confidence, 2)
 
 Not yet run on the board.
 
-## Evaluation rule
+### Evaluation rule
 
 Never split windows randomly: neighbouring windows are near-duplicates and the score is inflated. Split by recording, and once subject labels exist, by person.
