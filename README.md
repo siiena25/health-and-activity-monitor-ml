@@ -2,6 +2,8 @@
 
 Trains a standing / sitting / walking / running classifier from the BMI160 (SEN0250) recordings made with `imu_logger.py`.
 
+The parent's Android app (heart rate, SpO2, activity and heart rate warnings over BLE) is in [`android/`](android/README.md).
+
 ## Data
 
 `data/raw/*.csv`, columns `t_ms, ax, ay, az (m/s²), gx, gy, gz (rad/s), label`, 20 Hz, accelerometer ±8 g, gyro ±2000 °/s.
