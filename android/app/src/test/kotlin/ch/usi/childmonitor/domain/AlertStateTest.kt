@@ -82,9 +82,18 @@ class AlertStateTest {
 
     @Test
     fun `very high pulse while running uses the active limit`() {
-        val state = AlertState().feed(190, 0..12, activity = "running")
+        val state = AlertState().feed(180, 0..12, activity = "running")
 
-        assertEquals(180, state.active.getValue(AlertType.HighHeartRate).limit)
+        assertEquals(170, state.active.getValue(AlertType.HighHeartRate).limit)
+    }
+
+    @Test
+    fun `every high limit can be exceeded by a pulse the firmware is able to send`() {
+        val highest = AlertSettings(restingHighBpm = 999, activeHighBpm = 999, prolongedBpm = 999).clamped()
+
+        assertTrue(highest.restingHighBpm < AlertSettings.FIRMWARE_MAX_BPM)
+        assertTrue(highest.activeHighBpm < AlertSettings.FIRMWARE_MAX_BPM)
+        assertTrue(highest.prolongedBpm < AlertSettings.FIRMWARE_MAX_BPM)
     }
 
     @Test
@@ -173,7 +182,7 @@ class AlertStateTest {
         val clamped = AlertSettings(lowBpm = 1, restingHighBpm = 999, prolongedMinutes = 0).clamped()
 
         assertEquals(40, clamped.lowBpm)
-        assertEquals(180, clamped.restingHighBpm)
+        assertEquals(175, clamped.restingHighBpm)
         assertEquals(1, clamped.prolongedMinutes)
     }
 

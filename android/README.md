@@ -38,7 +38,7 @@ The app warns the parent about three situations. SpO2 never raises a warning, be
 | Warning | Condition (default limit) | How long it must last |
 |---|---|---|
 | Low heart rate | below 60 BPM | about 10 s |
-| High heart rate | above 130 BPM at rest, above 180 BPM with activity | about 10 s |
+| High heart rate | above 130 BPM at rest, above 170 BPM with activity | about 10 s |
 | High for a long time | above 150 BPM while walking or running | 5 min |
 
 ### Activity context
@@ -77,10 +77,16 @@ Set on the **Alerts** tab and saved on the phone.
 |---|---|---|---|
 | Warnings on/off | | | on |
 | Low pulse: below | 40–100 BPM | 5 | 60 |
-| High at rest: above | 90–180 BPM | 5 | 130 |
-| High with activity: above | 130–220 BPM | 5 | 180 |
-| Long high pulse: above | 110–200 BPM | 5 | 150 |
+| High at rest: above | 90–175 BPM | 5 | 130 |
+| High with activity: above | 130–175 BPM | 5 | 170 |
+| Long high pulse: above | 110–175 BPM | 5 | 150 |
 | Long means at least | 1–30 min | 1 | 5 |
+
+### Why the limits stop at 175 BPM
+
+The firmware only reports heart rate from 40 to 180 BPM, higher results of the algorithm are discarded as noise.
+A warning needs a value strictly above its limit, so a limit of 180 or more could never be reached. The activity
+default is therefore 170 and every high limit stops at 175.
 
 ### Try it without the wearable
 

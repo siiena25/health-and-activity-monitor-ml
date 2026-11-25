@@ -6,7 +6,7 @@ data class AlertSettings(
     val enabled: Boolean = true,
     val lowBpm: Int = 60,
     val restingHighBpm: Int = 130,
-    val activeHighBpm: Int = 180,
+    val activeHighBpm: Int = 170,
     val prolongedBpm: Int = 150,
     val prolongedMinutes: Int = 5,
 ) {
@@ -19,10 +19,12 @@ data class AlertSettings(
     )
 
     companion object {
+        const val FIRMWARE_MAX_BPM = 180
+        private const val MAX_HIGH_LIMIT_BPM = FIRMWARE_MAX_BPM - 5
         val LOW_RANGE = 40..100
-        val RESTING_HIGH_RANGE = 90..180
-        val ACTIVE_HIGH_RANGE = 130..220
-        val PROLONGED_RANGE = 110..200
+        val RESTING_HIGH_RANGE = 90..MAX_HIGH_LIMIT_BPM
+        val ACTIVE_HIGH_RANGE = 130..MAX_HIGH_LIMIT_BPM
+        val PROLONGED_RANGE = 110..MAX_HIGH_LIMIT_BPM
         val PROLONGED_MINUTES_RANGE = 1..30
     }
 }
