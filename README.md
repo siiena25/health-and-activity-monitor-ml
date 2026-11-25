@@ -6,8 +6,42 @@ SpO2 and activity on an Android phone over Bluetooth Low Energy.
 | Part | Where |
 |---|---|
 | Parent's Android app | [`android/`](android/README.md) |
-| Activity model: data, training, export to C++ | `src/`, `data/`, `export/`, described below |
-| Arduino firmware | not in this repository |
+| Arduino firmware with the deployed activity model | [`firmware/child_monitor_v2/`](firmware/child_monitor_v2) |
+| Recordings and an offline baseline experiment | `data/`, `src/`, `export/` |
+
+## Wearable firmware
+
+`firmware/child_monitor_v2/` runs on the Portenta H7. Everything is computed on the board, the phone only shows it.
+
+| Part | I2C address | Role |
+|---|---|---|
+| MAX30102 (DFRobot SEN0344) | `0x57` | heart rate and SpO2 |
+| BMI160 (DFRobot SEN0250) | `0x69` or `0x68` | accelerometer and gyroscope |
+| OLED 128x64 | `0x3C` | shows activity, heart rate, SpO2 |
+
+- **Activity**: a multilayer perceptron (13 features, 16 hidden ReLU units, 4 classes, 292 parameters). IMU at
+  20 Hz, window of 4 s, a prediction every second, majority of the last 3 predictions. The team measured 96–97%
+  accuracy. The weights are in `model_data.h`, features and inference in `model_inference.h`. The training script
+  is not in this repository.
+- **Heart rate and SpO2**: Maxim algorithm over 4 s of samples at 25 Hz, recomputed every second. Values outside
+  40–180 BPM or 80–100% are dropped, the median of the last 7 valid results is reported, `--` without a finger.
+- **Outputs, once per second**: OLED, on-board LED (blue sitting, green standing, yellow walking, red running),
+  BLE and serial port.
+
+Flash `child_monitor_v2.ino` with the Arduino IDE (board package for Portenta, libraries ArduinoBLE, Adafruit GFX,
+Adafruit SSD1306, SparkFun MAX3010x).
+
+Known issues:
+- if the algorithm stops producing valid results while the finger stays on the sensor, the previous median is still
+  sent, so the app shows an old pulse as current;
+- if the IMU stops answering while running, the last activity is still sent instead of `--`.
+
+### Power
+
+Tested with a USB power bank. Do not power the board from two 3 V coin cells: in series they give 6 V while VIN is a
+5 V input, and a coin cell supplies a few milliamperes while the board can draw up to 230 mA (datasheet). A series
+resistor does not fix either problem. The intended battery is a single-cell 3.7 V Li-Po or Li-Ion of at least
+700 mAh on the J4 battery connector, which the board can also recharge.
 
 ## Android app
 
@@ -34,13 +68,15 @@ SpO2 and activity on an Android phone over Bluetooth Low Energy.
 | Warning | Default | How long it must last |
 |---|---|---|
 | Low heart rate | below 60 BPM | about 10 s |
-| High heart rate | above 130 at rest, above 180 with activity | about 10 s |
+| High heart rate | above 130 at rest, above 170 with activity | about 10 s |
 | High for a long time | above 150 while walking or running | 5 min |
 
 - Shown as a red banner and as a phone notification with vibration.
 - Limits and duration are adjustable, warnings can be switched off, past warnings are listed.
 - Single spikes of the noisy sensor are ignored, and the activity limit stays for 3 minutes after a run.
 - No warnings on SpO2, because that reading is not validated.
+
+The firmware reports heart rate up to 180 BPM only, so the high limits cannot be set above 175.
 
 Full rules are in [`android/README.md`](android/README.md#heart-rate-warnings).
 
@@ -71,9 +107,10 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 - No background service, so monitoring works only while the app is running.
 - Works only within Bluetooth range, history is not saved after the app closes.
 
-## Activity model
+## Offline baseline experiment
 
-Trains a standing / sitting / walking / running classifier from the BMI160 (SEN0250) recordings made with `imu_logger.py`.
+This part is **not** what runs on the board (that is the perceptron in `firmware/`). It is a Random Forest baseline
+trained on the BMI160 (SEN0250) recordings made with `imu_logger.py`, kept for comparison.
 
 ### Data
 
@@ -114,42 +151,7 @@ clang++ -std=c++17 -O2 -o /tmp/host_test export/host_test.cpp && /tmp/host_test 
 
 `export/activity_classifier.h` is the header-only C++ side: feature extraction and forest voting. `host_test.cpp` checks it against Python: all windows must get the same label, features must agree to 1e-4 relative, and the streaming `Classifier` must reproduce the first two windows. Last run: 866 windows, 0 label mismatches, worst feature error 2e-7.
 
-Firmware use:
-
-```cpp
-#include "activity_classifier.h"
-
-activity::Classifier classifier;
-
-void onImuSample(float ax, float ay, float az, float gx, float gy, float gz) {
-  float sample[6] = {ax, ay, az, gx, gy, gz};
-  activity::Result result;
-  if (classifier.push(sample, &result)) {
-    // result.name, result.confidence: one result every 1.5 s after the first 3 s
-  }
-}
-```
-
-Requirements on the firmware side:
-- samples must arrive at 20 Hz without gaps (the Python side resampled gaps by interpolation, the device does not);
-- units must match the logger: acceleration in m/s² (raw × 9.80665 / 4096 for ±8 g), angular rate in rad/s (raw × π / 180 / 16.4 for ±2000 °/s);
-- the sensor must sit on the wrist with the same axis orientation as during recording, because sitting and standing are told apart by wrist orientation.
-
-Publishing the result over BLE (the Android app already reads this; the current team firmware sends the label alone once per second, which the app accepts, confidence is optional):
-
-- characteristic `12345678-1234-1234-1234-123456789abf` in the `ChildMonitor` service, `BLERead | BLENotify`, `BLEStringCharacteristic` with at least 20 bytes;
-- value `label|confidence` such as `walking|0.91` (class name from `result.name`, confidence with two decimals), or `--` before the first result or when the IMU fails;
-- write it on every result, about every 1.5 s.
-
-```cpp
-BLEStringCharacteristic activityChar("12345678-1234-1234-1234-123456789abf", BLERead | BLENotify, 20);
-healthService.addCharacteristic(activityChar);
-activityChar.writeValue("--");
-
-activityChar.writeValue(String(result.name) + "|" + String(result.confidence, 2));
-```
-
-Not yet run on the board.
+The export was checked on a computer only, it has not been run on the board.
 
 ### Evaluation rule
 
