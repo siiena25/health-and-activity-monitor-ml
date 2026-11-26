@@ -29,14 +29,16 @@ No random window split is used, because overlapping windows would appear in both
 - The model on the board is trained on all 18 recordings.
 - The model was not tested on children.
 
-Not all 18 recordings are published here, so running the script on `data/raw` does not reproduce these numbers or the
-shipped `model_data.h`. To train on the published files:
+Not all 18 recordings are published here, so the published files do not reproduce these numbers or the shipped
+`model_data.h`. On them the script uses 13 recordings (1388 windows) and reports 96.3% leave one recording out.
+
+The script reads the CSV files of the current folder and writes `model_data.h` there. It stops on an empty CSV, and
+`data/raw` contains one, so copy the non-empty files to a separate folder first (run from the repository root, after
+the setup under "Train" below):
 
 ```bash
-cd data/raw && ../../.venv/bin/python ../../training/train_model.py
+REPO="$PWD" && mkdir -p /tmp/child-train && find data/raw -name '*.csv' -size +1k -exec cp {} /tmp/child-train/ \; && cd /tmp/child-train && "$REPO/.venv/bin/python" "$REPO/training/train_model.py"
 ```
-
-It reads the CSV files of the current folder and writes `model_data.h` there.
 
 ## Wearable firmware
 
