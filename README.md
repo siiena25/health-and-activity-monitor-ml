@@ -7,7 +7,36 @@ SpO2 and activity on an Android phone over Bluetooth Low Energy.
 |---|---|
 | Parent's Android app | [`android/`](android/README.md) |
 | Arduino firmware with the deployed activity model | [`firmware/child_monitor_v2/`](firmware/child_monitor_v2) |
+| Training script of the deployed model | [`training/`](training) |
 | Recordings and an offline baseline experiment | `data/`, `src/`, `export/` |
+
+## Activity model on the board
+
+Trained with scikit-learn `MLPClassifier` (cross-entropy, Adam with the default learning rate 0.001, L2
+`alpha=0.01`, at most 3000 iterations, fixed seed). Recordings are resampled to an exact 20 Hz grid, the first 2 s are
+removed, recordings shorter than 40 s are skipped and smaller classes are oversampled.
+
+No random window split is used, because overlapping windows would appear in both training and test.
+
+| Evaluation | Training data | Test data | Accuracy |
+|---|---|---|---|
+| Leave one recording out | 18 recordings, three adults, 1960 windows | each recording in turn | 96.8% |
+| Unseen person | 14 recordings, two adults, 1503 windows | a third adult, 457 windows | 97.4% |
+
+- On the unseen person most errors are standing predicted as sitting, at the start of the standing recording.
+- Without the orientation features (mean acceleration) the leave-one-recording-out accuracy drops to 94.7%.
+- 4 to 64 hidden units all give 96.6–96.8%, so the network was kept at 16.
+- The model on the board is trained on all 18 recordings.
+- The model was not tested on children.
+
+Not all 18 recordings are published here, so running the script on `data/raw` does not reproduce these numbers or the
+shipped `model_data.h`. To train on the published files:
+
+```bash
+cd data/raw && ../../.venv/bin/python ../../training/train_model.py
+```
+
+It reads the CSV files of the current folder and writes `model_data.h` there.
 
 ## Wearable firmware
 
@@ -20,9 +49,9 @@ SpO2 and activity on an Android phone over Bluetooth Low Energy.
 | OLED 128x64 | `0x3C` | shows activity, heart rate, SpO2 |
 
 - **Activity**: a multilayer perceptron (13 features, 16 hidden ReLU units, 4 classes, 292 parameters). IMU at
-  20 Hz, window of 4 s, a prediction every second, majority of the last 3 predictions. The team measured 96–97%
-  accuracy. The weights are in `model_data.h`, features and inference in `model_inference.h`. The training script
-  is not in this repository.
+  20 Hz, window of 4 s, a prediction every second, majority of the last 3 predictions. The weights are in
+  `model_data.h`, features and inference in `model_inference.h`, training in
+  [`training/train_model.py`](training/train_model.py) (see below).
 - **Heart rate and SpO2**: Maxim algorithm over 4 s of samples at 25 Hz, recomputed every second. Values outside
   40–180 BPM or 80–100% are dropped, the median of the last 7 valid results is reported, `--` without a finger.
 - **Outputs, once per second**: OLED, on-board LED (blue sitting, green standing, yellow walking, red running),
