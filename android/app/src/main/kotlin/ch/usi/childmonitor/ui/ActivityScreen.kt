@@ -117,8 +117,8 @@ fun ActivityScreen(state: MonitorUiState, modifier: Modifier = Modifier) {
             }
         }
         Text(
-            text = "Recognised on the wearable from wrist motion. The model was trained on recordings of two people, " +
-                "so treat the result as an indication, not a certainty.",
+            text = "Recognised on the wearable from wrist motion. The model was trained on recordings of three adults " +
+                "and not tested on children, so treat the result as an indication, not a certainty.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
